@@ -16,5 +16,5 @@ def timestamp_split(file_path):
     """
     df = pd.read_csv(file_path)
     df[["date", "time"]] = df["timestamp"].str.split(" ", n=1, expand=True)
-    df.drop(columns="timestamp")
+    df = df.drop(columns="timestamp")
     return df
