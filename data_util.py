@@ -15,6 +15,7 @@ def timestamp_split(file_path):
     Returns a pandas dataframe with new columns of "date" and "time" instead of the "timestamp"
     """
     df = pd.read_csv(file_path)
-    df[["date", "time"]] = df["timestamp"].str.split(" ", n=1, expand=True)
+    df["datetime"] = df["timestamp"].str.split(" ").str[:2].agg(" ".join)
+    df["datetime"] = pd.to_datetime(df["datetime"], format="%Y-%m-%d %H:%M:%S")
     df = df.drop(columns="timestamp")
     return df
