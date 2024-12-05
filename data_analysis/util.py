@@ -3,6 +3,8 @@ Helper functions for data cleaning and visualization of HVAC data
 """
 
 import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 
 def timestamp_split(file_path):
@@ -12,7 +14,7 @@ def timestamp_split(file_path):
     Args:
         file_path (str): string representing the path to the csv file to be split
 
-    Returns a pandas dataframe with new columns of "date" and "time" instead of the "timestamp"
+    Returns (pd.DataFrame) with new columns of "date" and "time" instead of the "timestamp"
     """
     df = pd.read_csv(file_path)
     df["datetime"] = df["timestamp"].str.split(" ").str[:2].agg(" ".join)
@@ -29,10 +31,17 @@ def filter_setpoint(df):
     Args:
         df (pandas.DataFrame): dataframe containing data to filter
 
-    Returns a filtered pandas DataFrame with only rows that are "occupied"
+    Returns (pd.DataFrame) with only rows that are "occupied"
     """
     top_threshold = max(df["RmTmpCspt"])
     bottom_threshold = min(df["RmTmpHpst"])
     df_filtered = df[df["RmTmpCspt"] < top_threshold]
     df_filtered = df_filtered[df["RmTmpHpst"] > bottom_threshold]
     return df_filtered
+
+
+def graph_df(df, df_filtered):
+    ax = sns.lineplot(data=df[:5000], x="datetime", y="RmTmp", color="black")
+    sns.scatterplot(data=df_filtered, x="datetime", y="RmTmpCspt", color="blue")
+    sns.scatterplot(data=df_filtered, x="datetime", y="RmTmpHpst", color="red")
+    plt.show()
