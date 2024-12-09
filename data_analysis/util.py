@@ -5,6 +5,7 @@ Helper functions for data cleaning and visualization of HVAC data
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def timestamp_split(file_path):
@@ -29,7 +30,7 @@ def filter_setpoint(df):
     kept. This runs on the assumption that unoccupied rooms usually end up at one of the extremes
 
     Args:
-        df (pandas.DataFrame): dataframe containing data to filter
+        df (pd.DataFrame): dataframe containing data to filter
 
     Returns (pd.DataFrame) with only rows that are "occupied"
     """
@@ -40,7 +41,42 @@ def filter_setpoint(df):
     return df_filtered
 
 
-def graph_df(df, df_filtered):
+def split_by_occupancy(df, df_full):
+    """
+    Split the data so only "occupied" rooms and the 20 time stamps after are included.
+
+    Args:
+        df (pd.DataFrame): dataframe containing filtered data
+        df_full (pd.DataFrame): dataframe containing original data
+
+    Returns (pd.DataFrame) with data segmented by occupancy
+    """
+    final_data = {}
+    list_of_df = [d for _, d in df.groupby(df.index - np.arange(len(df)))]
+    for new_df in list_of_df:
+        start_idx = new_df.index[0]
+        this_data = df_full.loc[range(start_idx, start_idx + 20)]
+        if final_data == {}:
+            final_data = this_data.to_dict()
+        else:
+            for k, v in this_data.to_dict().items():
+                orig_dict = final_data[k]
+                orig_dict.update(v)
+                final_data[k] = orig_dict
+    return pd.DataFrame(final_data)
+
+
+################### GRAPHING FUNCTIONS ##############################################################
+
+
+def graph_df_temp(df, df_filtered):
+    """
+    Plot temperature and setpoints against time.
+
+    Args:
+        df (pd.DataFrame): dataframe containing raw data
+        df_filtered (pd.DataFrame): dataframe containing filtered data
+    """
     ax = sns.lineplot(data=df[:5000], x="datetime", y="RmTmp", color="black")
     sns.scatterplot(data=df_filtered, x="datetime", y="RmTmpCspt", color="blue")
     sns.scatterplot(data=df_filtered, x="datetime", y="RmTmpHpst", color="red")
