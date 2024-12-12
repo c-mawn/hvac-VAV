@@ -59,7 +59,10 @@ def split_by_occupancy(df, df_full):
             new_df.head(1)["RmTmp"] <= (new_df.head(1)["RmTmpCspt"] - 3)
         ).all():
             start_idx = new_df.index[0]
-            this_data = df_full.loc[range(start_idx, start_idx + 20)]
+            if start_idx + 20 in df_full.index:
+                this_data = df_full.loc[range(start_idx, start_idx + 20)]
+            else:
+                this_data = df_full.loc[start_idx:]
             if final_data == {}:
                 final_data = this_data.to_dict()
             else:
@@ -70,7 +73,12 @@ def split_by_occupancy(df, df_full):
     return pd.DataFrame(final_data)
 
 
-def aggregate_by_occupancy(df, df_full):
+def remove_asymptotes(df, df_full):
+    """
+    Clean data so when desired temperature asymptote is reached, remaining data is removed. This
+    helps identify how long it takes for each instance of the room occupancy to heat up to the
+    desired temperature.
+    """
     final_data = {}
     list_of_df = [d for _, d in df.groupby(df.index - np.arange(len(df)))]
 
@@ -78,13 +86,16 @@ def aggregate_by_occupancy(df, df_full):
         start_idx = new_df.index[0]
         room_goal_temp = new_df.loc[start_idx]["RmTmpCspt"]
 
-        this_data = df_full.loc[range(start_idx, start_idx + 30)]
+        if start_idx + 20 in df_full.index:
+            this_data = df_full.loc[range(start_idx, start_idx + 30)]
+        else:
+            this_data = df_full.loc[start_idx:]
         this_data["TempDiff"] = abs(this_data.RmTmp - room_goal_temp)
 
         end_idxes = this_data[this_data.TempDiff <= 2.5].index
         if len(end_idxes) == 0:
             continue
-        end_idx = end_idxes[0]
+        end_idx = end_idxes[0] + 1
         this_data = this_data.loc[range(start_idx, end_idx)]
 
         if final_data == {}:
@@ -94,6 +105,22 @@ def aggregate_by_occupancy(df, df_full):
                 orig_dict = final_data[k]
                 orig_dict.update(v)
                 final_data[k] = orig_dict
+    return pd.DataFrame(final_data)
+
+
+def simplify_occurrences(df):
+    final_data = []
+    list_of_df = [d for _, d in df.groupby(df.index - np.arange(len(df)))]
+
+    for new_df in list_of_df:
+        this_occurrence = new_df.loc[new_df.index[0]]
+        this_occurrence["TimeToStable"] = (
+            new_df.iloc[-1].datetime - this_occurrence.datetime
+        ).total_seconds() // 60
+        if this_occurrence["TimeToStable"] > 300:
+            continue
+        final_data.append(this_occurrence)
+
     return pd.DataFrame(final_data)
 
 
@@ -122,3 +149,15 @@ def graph_aggregated_temp(df):
         sns.lineplot(data=new_df, x=np.arange(20), y="RmTmpCspt", color="black")
         plt.title(new_df.loc[start_idx, "datetime"])
         plt.show()
+
+
+def scatter_temp_diff_vs_time_room(df):
+    plt.scatter(df.TempDiff, df.TimeToStable)
+
+
+def scatter_temp_diff_vs_time_all_room(df_list):
+    for df in df_list:
+        print(df)
+        plt.scatter(df.TempDiff, df.TimeToStable)
+
+    plt.show()
