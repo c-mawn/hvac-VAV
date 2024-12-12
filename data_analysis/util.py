@@ -21,6 +21,8 @@ def timestamp_split(file_path):
     df["datetime"] = df["timestamp"].str.split(" ").str[:2].agg(" ".join)
     df["datetime"] = pd.to_datetime(df["datetime"], format="%Y-%m-%d %H:%M:%S")
     df = df.drop(columns="timestamp")
+    index = pd.DatetimeIndex(df["datetime"])
+    df = df.iloc[index.indexer_between_time("09:00", "18:00")]
     return df
 
 
@@ -86,7 +88,7 @@ def remove_asymptotes(df, df_full):
         start_idx = new_df.index[0]
         room_goal_temp = new_df.loc[start_idx]["RmTmpCspt"]
 
-        if start_idx + 20 in df_full.index:
+        if start_idx + 30 in df_full.index:
             this_data = df_full.loc[range(start_idx, start_idx + 30)]
         else:
             this_data = df_full.loc[start_idx:]
