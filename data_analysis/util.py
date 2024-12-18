@@ -146,7 +146,7 @@ def simplify_occurrences(df):
     return pd.DataFrame(final_data)
 
 
-def combine_all_room_data(room_list: List[str], data_getter, room_stats_path):
+def combine_all_room_data(room_list: List[str], data_getter, room_stats_path) -> List[pd.DataFrame]:
     """
     Process room data through a series of filtering and aggregation steps.
 
@@ -172,6 +172,7 @@ def combine_all_room_data(room_list: List[str], data_getter, room_stats_path):
     except Exception as e:
         print(f"Error reading room statistics file: {e}")
         room_stats_df = pd.DataFrame()
+
     processed_rooms = []
 
     for room in room_list:
@@ -194,8 +195,6 @@ def combine_all_room_data(room_list: List[str], data_getter, room_stats_path):
                 full_df["unoccHeat"] = room_stats["unoccHeat"].values[0]
                 full_df["unoccCool"] = room_stats["unoccCool"].values[0]
                 full_df["roomSqFt"] = room_stats["roomSqFt"].values[0]
-
-            full_df.to_csv("../data/aggregatedData.csv", index=False)
 
             filtered_df1 = filter_setpoint(full_df)
             if filtered_df1.empty:
