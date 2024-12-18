@@ -248,48 +248,6 @@ def graph_df_temp(df, df_filtered) -> matplotlib.axes.Axes:
     return ax
 
 
-def graph_aggregated_temp(df):
-    """
-    Create multiple line plots for temperature variations across different occurrences.
-
-    Args:
-        df (pd.DataFrame): Input temperature data
-    """
-
-    # # Group by contiguous index segments
-    # grouped = df.groupby((df.index.to_series().diff() != 1).cumsum())
-
-    # # Filter groups with more than 1 data point
-    # valid_groups = [group_df for _, group_df in grouped if len(group_df) > 1]
-
-    # plt.figure(figsize=(15, 10))
-
-    # for i, group_df in enumerate(valid_groups, 1):
-    #     plt.subplot(3, 3, i)
-
-    #     # Ensure x-axis is consistent
-    #     x = np.arange(len(group_df))
-    #     print(f"Occurence: {i}, Date: {group_df.iloc[0]['datetime']}")
-    #     print(f"{df.index.to_series()}")
-    #     print(f"Diff: {df.index.to_series().diff()}")
-    #     print(f"Temp: {group_df['RmTmp']}")
-    #     print(f"Temp Setpoint: {group_df['RmTmpCspt']}")
-
-    #     plt.plot(x, group_df["RmTmp"], label="Room Temperature")
-    #     plt.plot(x, group_df["RmTmpCspt"], color="black", label="Setpoint")
-    #     plt.title(f"Occurrence {i}: {group_df.iloc[0]['datetime']}")
-    #     plt.xlabel("Time")
-    #     plt.ylabel("Temperature")
-    #     plt.legend()
-    #     plt.grid(True)
-
-    #     if i >= 9:
-    #         break
-
-    # plt.tight_layout()
-    # plt.show()
-
-
 def scatter_temp_diff_vs_time_room(df):
     """
     Create a scatter plot of temperature difference vs stabilization time for a single room.
@@ -301,14 +259,12 @@ def scatter_temp_diff_vs_time_room(df):
     plt.scatter(df.TempDiff, df.TimeToStable)
 
 
-def scatter_temp_diff_vs_time_all_room(df_list):
-    """
-    Create scatter plots of temperature difference vs stabilization time for multiple rooms.
-
-    Args:
-        df_list (list): List of DataFrames containing temperature data
-    """
-    for df in df_list:
-        plt.title(f"TemDiff vs Time all room for {df.iloc[0]['idBAS']}")
-        plt.scatter(df.TempDiff, df.TimeToStable)
-        plt.show()
+def scatter_temp_diff_vs_time_all_room(df_list, room_list):
+    for i in range(len(df_list)):
+        df = df_list[i]
+        if len(df) > 0:
+            plt.scatter(df.TempDiff, df.TimeToStable, c="b")
+            plt.title(room_list[i])
+            plt.xlabel("Initial Temperature Difference")
+            plt.ylabel("Time till Stable (min)")
+            plt.show()
