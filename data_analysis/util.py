@@ -4,6 +4,7 @@ Helper functions for data cleaning and visualization of HVAC data
 
 import pandas as pd
 import seaborn as sns
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from typing import List
@@ -49,9 +50,9 @@ def filter_setpoint(df):
         return pd.DataFrame()
 
     top_threshold = max(df["RmTmpCspt"])
-    bottom_threshold = min(df["RmTmpHpst"])
-    df_filtered = df[df["RmTmpCspt"] < top_threshold]
-    df_filtered = df_filtered.loc[df["RmTmpHpst"] > bottom_threshold]
+    bottom_threshold = df["RmTmpHpst"].value_counts().idxmax()  # min(df["RmTmpHpst"])
+    df_filtered = df[df["RmTmpCspt"] != top_threshold]
+    df_filtered = df_filtered.loc[df["RmTmpHpst"] != bottom_threshold]
     return df_filtered
 
 
@@ -229,18 +230,22 @@ def combine_all_room_data(room_list: List[str], data_getter, room_stats_path) ->
 ################### GRAPHING FUNCTIONS ##############################################################
 
 
-def graph_df_temp(df, df_filtered):
+def graph_df_temp(df, df_filtered) -> matplotlib.axes.Axes:
     """
     Plot temperature and setpoints against time.
 
     Args:
         df (pd.DataFrame): dataframe containing raw data
         df_filtered (pd.DataFrame): dataframe containing filtered data
+
+    Returns: matplotlib.axes.Axes representing the graph
+
     """
     ax = sns.lineplot(data=df, x="datetime", y="RmTmp", color="black")
     sns.scatterplot(data=df_filtered, x="datetime", y="RmTmpCspt", color="blue")
     sns.scatterplot(data=df_filtered, x="datetime", y="RmTmpHpst", color="red")
     plt.show()
+    return ax
 
 
 def graph_aggregated_temp(df):
@@ -250,38 +255,39 @@ def graph_aggregated_temp(df):
     Args:
         df (pd.DataFrame): Input temperature data
     """
-    # Group by contiguous index segments
-    grouped = df.groupby((df.index.to_series().diff() != 1).cumsum())
 
-    # Filter groups with more than 1 data point
-    valid_groups = [group_df for _, group_df in grouped if len(group_df) > 1]
+    # # Group by contiguous index segments
+    # grouped = df.groupby((df.index.to_series().diff() != 1).cumsum())
 
-    plt.figure(figsize=(15, 10))
+    # # Filter groups with more than 1 data point
+    # valid_groups = [group_df for _, group_df in grouped if len(group_df) > 1]
 
-    for i, group_df in enumerate(valid_groups, 1):
-        plt.subplot(3, 3, i)
+    # plt.figure(figsize=(15, 10))
 
-        # Ensure x-axis is consistent
-        x = np.arange(len(group_df))
-        print(f"Occurence: {i}, Date: {group_df.iloc[0]['datetime']}")
-        print(f"{df.index.to_series()}")
-        print(f"Diff: {df.index.to_series().diff()}")
-        print(f"Temp: {group_df['RmTmp']}")
-        print(f"Temp Setpoint: {group_df['RmTmpCspt']}")
+    # for i, group_df in enumerate(valid_groups, 1):
+    #     plt.subplot(3, 3, i)
 
-        plt.plot(x, group_df["RmTmp"], label="Room Temperature")
-        plt.plot(x, group_df["RmTmpCspt"], color="black", label="Setpoint")
-        plt.title(f"Occurrence {i}: {group_df.iloc[0]['datetime']}")
-        plt.xlabel("Time")
-        plt.ylabel("Temperature")
-        plt.legend()
-        plt.grid(True)
+    #     # Ensure x-axis is consistent
+    #     x = np.arange(len(group_df))
+    #     print(f"Occurence: {i}, Date: {group_df.iloc[0]['datetime']}")
+    #     print(f"{df.index.to_series()}")
+    #     print(f"Diff: {df.index.to_series().diff()}")
+    #     print(f"Temp: {group_df['RmTmp']}")
+    #     print(f"Temp Setpoint: {group_df['RmTmpCspt']}")
 
-        if i >= 9:
-            break
+    #     plt.plot(x, group_df["RmTmp"], label="Room Temperature")
+    #     plt.plot(x, group_df["RmTmpCspt"], color="black", label="Setpoint")
+    #     plt.title(f"Occurrence {i}: {group_df.iloc[0]['datetime']}")
+    #     plt.xlabel("Time")
+    #     plt.ylabel("Temperature")
+    #     plt.legend()
+    #     plt.grid(True)
 
-    plt.tight_layout()
-    plt.show()
+    #     if i >= 9:
+    #         break
+
+    # plt.tight_layout()
+    # plt.show()
 
 
 def scatter_temp_diff_vs_time_room(df):
