@@ -181,11 +181,6 @@ def combine_all_room_data(room_list: List[str], data_getter, room_stats_path) ->
     Raises:
         ValueError: If data retrieval or processing fails for any room
     """
-    try:
-        room_stats_df = pd.read_csv(room_stats_path)
-    except Exception as e:
-        print(f"Error reading room statistics file: {e}")
-        room_stats_df = pd.DataFrame()
 
     processed_rooms = []
 
