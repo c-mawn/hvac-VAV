@@ -145,6 +145,20 @@ def simplify_occurrences(df):
 
     return pd.DataFrame(final_data)
 
+def add_meta_data(full_df, room_stats_df, room):
+    """
+    Add metadata to the data
+    """
+    room_stats = room_stats_df[room_stats_df["idBAS"] == f"Flo2.3-{room}"]
+
+    # If room stats exist, merge them with the room data
+    if not room_stats.empty:
+        full_df["idBAS"] = room_stats["idBAS"].values[0]
+        full_df["prof"] = room_stats["prof"].values[0]
+        full_df["unoccDamper"] = room_stats["unoccDamper"].values[0]
+        full_df["unoccHeat"] = room_stats["unoccHeat"].values[0]
+        full_df["unoccCool"] = room_stats["unoccCool"].values[0]
+        full_df["roomSqFt"] = room_stats["roomSqFt"].values[0]
 
 def combine_all_room_data(room_list: List[str], data_getter, room_stats_path) -> List[pd.DataFrame]:
     """
@@ -183,18 +197,6 @@ def combine_all_room_data(room_list: List[str], data_getter, room_stats_path) ->
             if full_df is None or full_df.empty:
                 print(f"Skipping room {room}: No data available")
                 continue
-
-            # Find matching room statistics
-            room_stats = room_stats_df[room_stats_df["idBAS"] == f"Flo2.3-{room}"]
-
-            # If room stats exist, merge them with the room data
-            if not room_stats.empty:
-                full_df["idBAS"] = room_stats["idBAS"].values[0]
-                full_df["prof"] = room_stats["prof"].values[0]
-                full_df["unoccDamper"] = room_stats["unoccDamper"].values[0]
-                full_df["unoccHeat"] = room_stats["unoccHeat"].values[0]
-                full_df["unoccCool"] = room_stats["unoccCool"].values[0]
-                full_df["roomSqFt"] = room_stats["roomSqFt"].values[0]
 
             filtered_df1 = filter_setpoint(full_df)
             if filtered_df1.empty:
@@ -287,6 +289,7 @@ def scatter_temp_diff_vs_time_room(df):
     Args:
         df (pd.DataFrame): Input temperature data
     """
+    plt.title(f"TemDiff vs TimeToStable for {df.iloc[0]['idBAS']}")
     plt.scatter(df.TempDiff, df.TimeToStable)
 
 
@@ -299,6 +302,8 @@ def scatter_temp_diff_vs_time_all_room(df_list):
     """
     for df in df_list:
         print(df)
+        plt.title(f"TemDiff vs Time all room for {df.iloc[0]['idBAS']}")
         plt.scatter(df.TempDiff, df.TimeToStable)
+        plt.show()
 
-    plt.show()
+    
