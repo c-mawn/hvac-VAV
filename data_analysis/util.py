@@ -159,6 +159,8 @@ def add_meta_data(full_df, room_stats_df, room):
         full_df["unoccHeat"] = room_stats["unoccHeat"].values[0]
         full_df["unoccCool"] = room_stats["unoccCool"].values[0]
         full_df["roomSqFt"] = room_stats["roomSqFt"].values[0]
+    
+    return full_df
 
 def combine_all_room_data(room_list: List[str], data_getter, room_stats_path) -> List[pd.DataFrame]:
     """
@@ -188,22 +190,26 @@ def combine_all_room_data(room_list: List[str], data_getter, room_stats_path) ->
         try:
             # Retrieve room data
             full_df = data_getter(room)
-
             if full_df is None or full_df.empty:
                 print(f"Skipping room {room}: No data available")
                 continue
+            
+            # Add metadata to the data
+            room_stats_path = "../data/RoomStatsCopy.csv"
+            room_stats_df = pd.read_csv(room_stats_path)
+            meta_full_df = add_meta_data(full_df, room_stats_df, room)
 
-            filtered_df1 = filter_setpoint(full_df)
+            filtered_df1 = filter_setpoint(meta_full_df)
             if filtered_df1.empty:
                 print(f"Skipping room {room}: No data after setpoint filtering")
                 continue
 
-            filtered_df = split_by_occupancy(filtered_df1, full_df)
+            filtered_df = split_by_occupancy(filtered_df1, meta_full_df)
             if filtered_df.empty:
                 print(f"Skipping room {room}: No occupancy data found")
                 continue
 
-            agg_df = remove_asymptotes(filtered_df, full_df)
+            agg_df = remove_asymptotes(filtered_df, meta_full_df)
             if agg_df.empty:
                 print(f"Skipping room {room}: No data after asymptote removal")
                 continue
@@ -247,7 +253,6 @@ def graph_aggregated_temp(df):
 
     # Filter groups with more than 1 data point
     valid_groups = [group_df for _, group_df in grouped if len(group_df) > 1]
-    print(valid_groups)
 
     plt.figure(figsize=(15, 10))
 
@@ -296,7 +301,6 @@ def scatter_temp_diff_vs_time_all_room(df_list):
         df_list (list): List of DataFrames containing temperature data
     """
     for df in df_list:
-        print(df)
         plt.title(f"TemDiff vs Time all room for {df.iloc[0]['idBAS']}")
         plt.scatter(df.TempDiff, df.TimeToStable)
         plt.show()
