@@ -6,7 +6,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
-
+from typing import List
 
 def timestamp_split(file_path):
     """
@@ -19,11 +19,11 @@ def timestamp_split(file_path):
     """
     try:
         df = pd.read_csv(file_path)
-        df["datetime"] = df["timestamp"].str.split(" ").str[:2].agg(" ".join)
+        df["datetime"] = df["timestamp"].str.split(" ").str[:2].str.join(" ")
         df["datetime"] = pd.to_datetime(df["datetime"], format="%Y-%m-%d %H:%M:%S")
         df = df.drop(columns="timestamp")
         index = pd.DatetimeIndex(df["datetime"])
-        df = df.iloc[index.indexer_between_time("09:00", "18:00")]
+        df = df.iloc[index.indexer_between_time("08:00", "18:00")]
         return df
     
     except FileNotFoundError:
@@ -49,9 +49,11 @@ def filter_setpoint(df):
     
     top_threshold = max(df["RmTmpCspt"])
     bottom_threshold = min(df["RmTmpHpst"])
+    # print(df)
     df_filtered = df[df["RmTmpCspt"] < top_threshold]
-    df_filtered = df_filtered[df["RmTmpHpst"] > bottom_threshold]
-
+    # print(df_filtered)
+    df_filtered = df_filtered.loc[df["RmTmpHpst"] > bottom_threshold]
+    # print(df_filtered)
     return df_filtered
 
 
@@ -65,22 +67,24 @@ def split_by_occupancy(df, df_full):
 
     Returns (pd.DataFrame) with data segmented by occupancy
     """
-    final_data = []
-    
-    for group_key, group_df in df.groupby((df.index.to_series().diff() != 1).cumsum()):
+    significant_segments = [
+        group for _, group in df.groupby(df.index - np.arange(len(df)))
         if (
-            (group_df['RmTmp'] >= (group_df['RmTmpCspt'] + 3)).any() or 
-            (group_df['RmTmp'] <= (group_df['RmTmpCspt'] - 3)).any()
-        ):
-            start_idx = group_df.index[0]
-            try:
-                this_data = df_full.loc[start_idx:start_idx+19]
-            except KeyError:
-                this_data = df_full.loc[start_idx:]
-            
-            final_data.append(this_data)
+            (group.head(1)["RmTmp"] >= (group.head(1)["RmTmpCspt"] + 3)).all() or
+            (group.head(1)["RmTmp"] <= (group.head(1)["RmTmpCspt"] - 3)).all()
+        )
+    ]
+
+    extracted_segments = []
+    for segment in significant_segments:
+        start_idx = segment.index[0]
+        end_idx = min(start_idx + 20, df_full.index[-1])
+        extracted_segments.append(df_full.loc[start_idx:end_idx])
     
-    return pd.concat(final_data) if final_data else pd.DataFrame()
+    if extracted_segments:
+        return pd.concat(extracted_segments)
+    else:
+        pd.DataFrame()
 
 
 def remove_asymptotes(df, df_full):
@@ -89,19 +93,24 @@ def remove_asymptotes(df, df_full):
     helps identify how long it takes for each instance of the room occupancy to heat up to the
     desired temperature.
     """
-    final_data = []
-    list_of_df = [d for _, d in df.groupby(df.index - np.arange(len(df)))]
+    cleaned_segments = []
+    for _, segment in df.groupby(df.index - np.arange(len(df))):
+        start_idx = segment.index[0]
+        room_goal_temp = segment.loc[start_idx]["RmTmpCspt"]
 
-    for new_df in list_of_df:
-        this_occurrence = new_df.loc[new_df.index[0]]
-        this_occurrence["TimeToStable"] = (
-            new_df.iloc[-1].datetime - this_occurrence.datetime
-        ).total_seconds() // 60
-        if this_occurrence["TimeToStable"] > 300:
-            continue
-        final_data.append(this_occurrence)
+        end_idx = min(start_idx + 30, df_full.index[-1])
+        this_data = df_full.loc[start_idx:end_idx].copy()
+        this_data["TempDiff"] = abs(this_data.RmTmp - room_goal_temp)
+        goal_reached_indices = this_data[this_data.TempDiff <= 2.5].index
+        
+        if len(goal_reached_indices) > 0:
+            cleaned_segment = this_data.loc[start_idx:goal_reached_indices[0]]
+            cleaned_segments.append(cleaned_segment)
 
-    return pd.DataFrame(final_data)
+    if cleaned_segments:
+        return pd.concat(cleaned_segments) 
+    else:
+        return pd.DataFrame()
 
 
 def simplify_occurrences(df):
@@ -114,16 +123,102 @@ def simplify_occurrences(df):
     Returns:
         pd.DataFrame: Summarized occurrences with stabilization time less than 300 minutes
     """
-    final_data = []
-    for group_key, group_df in df.groupby((df.index.to_series().diff() != 1).cumsum()):
-        first_record = group_df.iloc[0]
-        time_to_stable = (group_df.iloc[-1]['datetime'] - first_record['datetime']).total_seconds() / 60
+    df['datetime'] = pd.to_datetime(df['datetime'])
 
-        if 0 < time_to_stable <= 300:  # 5 hours max
-            first_record['TimeToStable'] = time_to_stable
-            final_data.append(first_record)
+    final_data = []
+    list_of_df = [d for _, d in df.groupby(df.index - np.arange(len(df)))]
+
+    for new_df in list_of_df:
+        this_occurrence = new_df.loc[new_df.index[0]].copy()
+        this_occurrence["TimeToStable"] = (
+            new_df.iloc[-1].datetime - this_occurrence.datetime
+        ).total_seconds() // 60
+        
+        if this_occurrence["TimeToStable"] > 30:
+            continue
+        
+        final_data.append(this_occurrence)
+
+    return pd.DataFrame(final_data)
+
+def process_room_data(room_list: List[str], data_getter, room_stats_path) -> List[pd.DataFrame]:
+    """
+    Process room data through a series of filtering and aggregation steps.
+
+    This utility function applies a standard data processing pipeline to a list of rooms:
+    1. Load room statistics from CSV
+    2. Retrieve full dataset for each room
+    3. Merge room statistics with room data
+    4. Filter by setpoint
+    5. Split by occupancy
+    6. Remove asymptotes
+    7. Simplify occurrences
+
+    Args:
+        room_list (List[str]): List of room identifiers to process
+        data_getter (callable): Function to retrieve data for a specific room
+        room_stats_path (str, optional): Path to the room statistics CSV file
+
+    Returns:
+        List[pd.DataFrame]: List of processed DataFrames, one for each room
     
-    return pd.DataFrame(final_data) if final_data else pd.DataFrame()
+    Raises:
+        ValueError: If data retrieval or processing fails for any room
+    """
+    try:
+        room_stats_df = pd.read_csv(room_stats_path)
+    except Exception as e:
+        print(f"Error reading room statistics file: {e}")
+        room_stats_df = pd.DataFrame()
+    processed_rooms = []
+
+    for room in room_list:
+        try:
+            # Retrieve room data
+            full_df = data_getter(room)
+   
+            if full_df is None or full_df.empty:
+                print(f"Skipping room {room}: No data available")
+                continue
+    
+            # Find matching room statistics
+            room_stats = room_stats_df[room_stats_df['idBAS'] == f"Flo2.3-{room}"]
+            
+            # If room stats exist, merge them with the room data
+            if not room_stats.empty:
+                full_df['idBAS'] = room_stats['idBAS'].values[0]
+                full_df['prof'] = room_stats['prof'].values[0]
+                full_df['unoccDamper'] = room_stats['unoccDamper'].values[0]
+                full_df['unoccHeat'] = room_stats['unoccHeat'].values[0]
+                full_df['unoccCool'] = room_stats['unoccCool'].values[0]
+                full_df['roomSqFt'] = room_stats['roomSqFt'].values[0]
+            
+            full_df.to_csv('../data/aggregatedData.csv', index=False)
+
+
+            filtered_df1 = filter_setpoint(full_df)
+            if filtered_df1.empty:
+                print(f"Skipping room {room}: No data after setpoint filtering")
+                continue
+
+            filtered_df = split_by_occupancy(filtered_df1, full_df)
+            if filtered_df.empty:
+                print(f"Skipping room {room}: No occupancy data found")
+                continue
+            
+            agg_df = remove_asymptotes(filtered_df, full_df)
+            if agg_df.empty:
+                print(f"Skipping room {room}: No data after asymptote removal")
+                continue
+            
+            final_df = simplify_occurrences(agg_df)
+            if not final_df.empty:
+                processed_rooms.append(final_df)
+
+        except Exception as e:
+            print(f"Error processing room {room}: {e}")
+    
+    return processed_rooms
 
 
 ################### GRAPHING FUNCTIONS ##############################################################
@@ -150,13 +245,25 @@ def graph_aggregated_temp(df):
     Args:
         df (pd.DataFrame): Input temperature data
     """
+     # Group by contiguous index segments
+    grouped = df.groupby((df.index.to_series().diff() != 1).cumsum())
+    
+    # Filter groups with more than 1 data point
+    valid_groups = [group_df for _, group_df in grouped if len(group_df) > 1]
+    print(valid_groups)
+    
     plt.figure(figsize=(15, 10))
     
-    for i, (_, group_df) in enumerate(df.groupby((df.index.to_series().diff() != 1).cumsum()), 1):
-        plt.subplot(3, 3, i)  # Adjust grid as needed
+    for i, group_df in enumerate(valid_groups, 1):
+        plt.subplot(3, 3, i)  
         
         # Ensure x-axis is consistent
         x = np.arange(len(group_df))
+        print(f"Occurence: {i}, Date: {group_df.iloc[0]['datetime']}")
+        print(f"{df.index.to_series()}")
+        print(f"Diff: {df.index.to_series().diff()}")
+        print(f"Temp: {group_df['RmTmp']}")
+        print(f"Temp Setpoint: {group_df['RmTmpCspt']}")
         
         plt.plot(x, group_df['RmTmp'], label='Room Temperature')
         plt.plot(x, group_df['RmTmpCspt'], color='black', label='Setpoint')
