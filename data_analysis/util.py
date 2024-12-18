@@ -145,6 +145,7 @@ def simplify_occurrences(df):
 
     return pd.DataFrame(final_data)
 
+
 def add_meta_data(full_df, room_stats_df, room):
     """
     Add metadata to the data
@@ -159,8 +160,9 @@ def add_meta_data(full_df, room_stats_df, room):
         full_df["unoccHeat"] = room_stats["unoccHeat"].values[0]
         full_df["unoccCool"] = room_stats["unoccCool"].values[0]
         full_df["roomSqFt"] = room_stats["roomSqFt"].values[0]
-    
+
     return full_df
+
 
 def combine_all_room_data(room_list: List[str], data_getter, room_stats_path) -> List[pd.DataFrame]:
     """
@@ -193,7 +195,7 @@ def combine_all_room_data(room_list: List[str], data_getter, room_stats_path) ->
             if full_df is None or full_df.empty:
                 print(f"Skipping room {room}: No data available")
                 continue
-            
+
             # Add metadata to the data
             room_stats_path = "../data/RoomStatsCopy.csv"
             room_stats_df = pd.read_csv(room_stats_path)
@@ -221,7 +223,7 @@ def combine_all_room_data(room_list: List[str], data_getter, room_stats_path) ->
         except Exception as e:
             print(f"Error processing room {room}: {e}")
 
-    return processed_rooms
+    return pd.concat(processed_rooms, axis=0)
 
 
 ################### GRAPHING FUNCTIONS ##############################################################
@@ -235,7 +237,7 @@ def graph_df_temp(df, df_filtered):
         df (pd.DataFrame): dataframe containing raw data
         df_filtered (pd.DataFrame): dataframe containing filtered data
     """
-    ax = sns.lineplot(data=df[:5000], x="datetime", y="RmTmp", color="black")
+    ax = sns.lineplot(data=df, x="datetime", y="RmTmp", color="black")
     sns.scatterplot(data=df_filtered, x="datetime", y="RmTmpCspt", color="blue")
     sns.scatterplot(data=df_filtered, x="datetime", y="RmTmpHpst", color="red")
     plt.show()
@@ -289,7 +291,7 @@ def scatter_temp_diff_vs_time_room(df):
     Args:
         df (pd.DataFrame): Input temperature data
     """
-    plt.title(f"TemDiff vs TimeToStable for {df.iloc[0]['idBAS']}")
+    plt.title(f"TemDiff vs TimeToStable")
     plt.scatter(df.TempDiff, df.TimeToStable)
 
 
@@ -304,5 +306,3 @@ def scatter_temp_diff_vs_time_all_room(df_list):
         plt.title(f"TemDiff vs Time all room for {df.iloc[0]['idBAS']}")
         plt.scatter(df.TempDiff, df.TimeToStable)
         plt.show()
-
-    
